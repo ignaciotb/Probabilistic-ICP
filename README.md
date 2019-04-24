@@ -1,7 +1,7 @@
 # Probabilistic ICP 
 
 Probabilistic variant of the iterative closest point algorithm.
-The point to plane matching is carried out using the Mahalanobis distance between the distributions from which the points in the PCLs have been drawned.
+The point to plane matching is carried out using the Mahalanobis distance between the distributions from which the points in the PCLs have been drawn.
 
 ## Dependencies (Ubuntu 16.04)
 * PCL  http://pointclouds.org/
