@@ -20,6 +20,6 @@ make -j4
 ### Available apps
 Avalible under the `bin` folder. Run
 ```
-./test_picp ../../icp_pkg/meshes/monkey.ply
+./test_picp ../meshes/monkey.ply
 ```
 And hit space until the algorithm reaches convergence and 'q' to exit.
