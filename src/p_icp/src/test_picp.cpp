@@ -9,6 +9,7 @@
 #include <pcl/registration/icp.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/console/time.h>   // TicToc
+#include <pcl/registration/correspondence_estimation.h>
 
 #include <eigen3/Eigen/Core>
 
@@ -114,7 +115,7 @@ int main (int argc, char* argv[]) {
     for(unsigned int i=0; i<cloud_in->points.size(); i++){
         cloud_in->points.at(i).x = cloud_in->points.at(i).x + d(seed);
         cloud_in->points.at(i).y = cloud_in->points.at(i).y + d(seed);
-        cloud_in->points.at(i).z = cloud_in->points.at(i).z + d(seed);
+        cloud_in->points.at(i).z = cloud_in->points.at(i).z + d(seed); 
 
         cloud_icp->points.at(i).x = cloud_icp->points.at(i).x + d(seed);
         cloud_icp->points.at(i).y = cloud_icp->points.at(i).y + d(seed);
@@ -247,5 +248,22 @@ int main (int argc, char* argv[]) {
         }
         next_iteration_icp = false;
     }
+
+    // ... read or fill in source and target
+    pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> est;
+    est.setInputSource(smsrc_pcl_ptr);
+    est.setInputTarget(smtrg_pcl_ptr);
+
+    pcl::Correspondences all_correspondences;
+    // Determine all reciprocal correspondences
+    est.determineReciprocalCorrespondences(all_correspondences);
+
+    float mean_error = 0;
+    for(auto correspondence_i: all_correspondences){
+        mean_error += std::abs(correspondence_i.distance);
+    }
+    mean_error /= all_correspondences.size();
+    std::cout << "mean error " << mean_error << std::endl;
+
     return 0;
 }
