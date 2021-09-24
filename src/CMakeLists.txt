@@ -27,3 +27,4 @@ include_directories(
 )
 
 add_subdirectory(p_icp)
+add_subdirectory(features)

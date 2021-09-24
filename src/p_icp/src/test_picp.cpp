@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include <pcl/io/ply_io.h>
+#include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/registration/icp.h>
 #include <pcl/visualization/pcl_visualizer.h>
@@ -86,7 +87,7 @@ int main (int argc, char* argv[]) {
         }
     }
 
-    if (pcl::io::loadPLYFile (argv[1], *cloud_in) < 0){
+    if (pcl::io::loadPCDFile (argv[1], *cloud_in) < 0){
         PCL_ERROR ("Error loading cloud %s.\n", argv[1]);
         return (-1);
     }
@@ -164,42 +165,42 @@ int main (int argc, char* argv[]) {
     pcl_source.cov_frame_ = tf_noise;
     pcl_target.cov_frame_ = tf_noise;
 
-    // Downsample preserving covariances attached
-    PointCloudT aux_pcl;
-    std::vector<Eigen::Matrix3f, Eigen::aligned_allocator<Eigen::Matrix3f>> aux_cov_vec;
-    unsigned int sub_cnt = 0;
-    // Target pcl
-    for(unsigned int i=0; i<pcl_target.pcl_.size(); i++){
-        if(sub_cnt == 10){
-            aux_pcl.points.push_back(pcl_target.pcl_.at(i));
-            aux_cov_vec.push_back(pcl_target.pcl_covs_.at(i));
-            sub_cnt = 0;
-        }
-        ++sub_cnt;
-    }
-    pcl_target.pcl_.clear();
-    pcl_target.pcl_ = aux_pcl;
-    pcl_target.pcl_covs_.clear();
-    pcl_target.pcl_covs_ = aux_cov_vec;
+    // // Downsample preserving covariances attached
+    // PointCloudT aux_pcl;
+    // std::vector<Eigen::Matrix3f, Eigen::aligned_allocator<Eigen::Matrix3f>> aux_cov_vec;
+    // unsigned int sub_cnt = 0;
+    // // Target pcl
+    // for(unsigned int i=0; i<pcl_target.pcl_.size(); i++){
+    //     if(sub_cnt == 10){
+    //         aux_pcl.points.push_back(pcl_target.pcl_.at(i));
+    //         aux_cov_vec.push_back(pcl_target.pcl_covs_.at(i));
+    //         sub_cnt = 0;
+    //     }
+    //     ++sub_cnt;
+    // }
+    // pcl_target.pcl_.clear();
+    // pcl_target.pcl_ = aux_pcl;
+    // pcl_target.pcl_covs_.clear();
+    // pcl_target.pcl_covs_ = aux_cov_vec;
 
-    // Clear aux containers and repeat for src pcl
-    aux_pcl.clear();
-    aux_cov_vec.clear();
-    sub_cnt = 0;
-    for(unsigned int i=0; i<pcl_source.pcl_.size(); i++){
-        if(sub_cnt == 10){
-            aux_pcl.points.push_back(pcl_source.pcl_.at(i));
-            aux_cov_vec.push_back(pcl_source.pcl_covs_.at(i));
-            sub_cnt = 0;
-        }
-        ++sub_cnt;
-    }
-    pcl_source.pcl_.clear();
-    pcl_source.pcl_ = aux_pcl;
-    pcl_source.pcl_covs_.clear();
-    pcl_source.pcl_covs_ = aux_cov_vec;
-    aux_pcl.clear();
-    aux_cov_vec.clear();
+    // // Clear aux containers and repeat for src pcl
+    // aux_pcl.clear();
+    // aux_cov_vec.clear();
+    // sub_cnt = 0;
+    // for(unsigned int i=0; i<pcl_source.pcl_.size(); i++){
+    //     if(sub_cnt == 10){
+    //         aux_pcl.points.push_back(pcl_source.pcl_.at(i));
+    //         aux_cov_vec.push_back(pcl_source.pcl_covs_.at(i));
+    //         sub_cnt = 0;
+    //     }
+    //     ++sub_cnt;
+    // }
+    // pcl_source.pcl_.clear();
+    // pcl_source.pcl_ = aux_pcl;
+    // pcl_source.pcl_covs_.clear();
+    // pcl_source.pcl_covs_ = aux_cov_vec;
+    // aux_pcl.clear();
+    // aux_cov_vec.clear();
 
     // Probabilistic ICP solver
     std::cout << "Creating PICP Solver" << std::endl;
