@@ -9,6 +9,9 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/registration/icp.h>
 
+#include "pcl/sample_consensus/sac_model.h"
+#include "pcl/sample_consensus/model_types.h"
+
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Dense>
 

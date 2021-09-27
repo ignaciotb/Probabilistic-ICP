@@ -22,10 +22,28 @@ typedef pcl::PointCloud<PointT> PointCloudT;
 using namespace std;
 
 bool next_iteration_icp = false;
+int v1 (0);
+int v2 (1);
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing){
   if (event.getKeySym () == "space" && event.keyDown ())
     next_iteration_icp = true;
+}
+
+void plotCorrespondences(pcl::visualization::PCLVisualizer& viewer, 
+                         pcl::Correspondences& corrs, 
+                         PointCloudT::Ptr& src, 
+                         PointCloudT::Ptr& trg){
+    // Plot initial trajectory estimate
+    viewer.removeAllShapes(v2);
+    int j = 0;
+    Eigen::Vector3i dr_color = Eigen::Vector3i(rand() % 256, rand() % 256, rand() % 256);
+    for(auto corr_i: corrs){
+        viewer.addLine(src->at(corr_i.index_query), trg->at(corr_i.index_match),
+                dr_color[0], dr_color[1], dr_color[2], "corr_" + std::to_string(j), v2);
+        j++;
+    }
+    viewer.spinOnce();
 }
 
 void pclVisualizer(pcl::visualization::PCLVisualizer& viewer,
@@ -34,8 +52,6 @@ void pclVisualizer(pcl::visualization::PCLVisualizer& viewer,
                    const PointCloudT::Ptr cloud_icp){
 
     // Viewports
-    int v1 (0);
-    int v2 (1);
     viewer.createViewPort (0.0, 0.0, 0.5, 1.0, v1);
     viewer.createViewPort (0.5, 0.0, 1.0, 1.0, v2);
     float bckgr_gray_level = 0.0;  // Black
@@ -88,7 +104,7 @@ int main (int argc, char* argv[]) {
         }
     }
 
-    if (pcl::io::loadPCDFile (argv[1], *cloud_in) < 0){
+    if (pcl::io::loadPLYFile (argv[1], *cloud_in) < 0){
         PCL_ERROR ("Error loading cloud %s.\n", argv[1]);
         return (-1);
     }
@@ -112,15 +128,15 @@ int main (int argc, char* argv[]) {
     std::mt19937 seed{rd()};
     double pcl_std_dev = 0.01;
     std::normal_distribution<double> d{0,pcl_std_dev};
-    for(unsigned int i=0; i<cloud_in->points.size(); i++){
-        cloud_in->points.at(i).x = cloud_in->points.at(i).x + d(seed);
-        cloud_in->points.at(i).y = cloud_in->points.at(i).y + d(seed);
-        cloud_in->points.at(i).z = cloud_in->points.at(i).z + d(seed); 
+    // for(unsigned int i=0; i<cloud_in->points.size(); i++){
+    //     cloud_in->points.at(i).x = cloud_in->points.at(i).x + d(seed);
+    //     cloud_in->points.at(i).y = cloud_in->points.at(i).y + d(seed);
+    //     cloud_in->points.at(i).z = cloud_in->points.at(i).z + d(seed); 
 
-        cloud_icp->points.at(i).x = cloud_icp->points.at(i).x + d(seed);
-        cloud_icp->points.at(i).y = cloud_icp->points.at(i).y + d(seed);
-        cloud_icp->points.at(i).z = cloud_icp->points.at(i).z + d(seed);
-    }
+    //     cloud_icp->points.at(i).x = cloud_icp->points.at(i).x + d(seed);
+    //     cloud_icp->points.at(i).y = cloud_icp->points.at(i).y + d(seed);
+    //     cloud_icp->points.at(i).z = cloud_icp->points.at(i).z + d(seed);
+    // }
 
     // PCL noise covariance
     Eigen::Matrix3f pcl_noise = Eigen::Matrix3f::Zero();
@@ -166,42 +182,42 @@ int main (int argc, char* argv[]) {
     pcl_source.cov_frame_ = tf_noise;
     pcl_target.cov_frame_ = tf_noise;
 
-    // // Downsample preserving covariances attached
-    // PointCloudT aux_pcl;
-    // std::vector<Eigen::Matrix3f, Eigen::aligned_allocator<Eigen::Matrix3f>> aux_cov_vec;
-    // unsigned int sub_cnt = 0;
-    // // Target pcl
-    // for(unsigned int i=0; i<pcl_target.pcl_.size(); i++){
-    //     if(sub_cnt == 10){
-    //         aux_pcl.points.push_back(pcl_target.pcl_.at(i));
-    //         aux_cov_vec.push_back(pcl_target.pcl_covs_.at(i));
-    //         sub_cnt = 0;
-    //     }
-    //     ++sub_cnt;
-    // }
-    // pcl_target.pcl_.clear();
-    // pcl_target.pcl_ = aux_pcl;
-    // pcl_target.pcl_covs_.clear();
-    // pcl_target.pcl_covs_ = aux_cov_vec;
+    // Downsample preserving covariances attached
+    PointCloudT aux_pcl;
+    std::vector<Eigen::Matrix3f, Eigen::aligned_allocator<Eigen::Matrix3f>> aux_cov_vec;
+    unsigned int sub_cnt = 0;
+    // Target pcl
+    for(unsigned int i=0; i<pcl_target.pcl_.size(); i++){
+        if(sub_cnt == 10){
+            aux_pcl.points.push_back(pcl_target.pcl_.at(i));
+            aux_cov_vec.push_back(pcl_target.pcl_covs_.at(i));
+            sub_cnt = 0;
+        }
+        ++sub_cnt;
+    }
+    pcl_target.pcl_.clear();
+    pcl_target.pcl_ = aux_pcl;
+    pcl_target.pcl_covs_.clear();
+    pcl_target.pcl_covs_ = aux_cov_vec;
 
-    // // Clear aux containers and repeat for src pcl
-    // aux_pcl.clear();
-    // aux_cov_vec.clear();
-    // sub_cnt = 0;
-    // for(unsigned int i=0; i<pcl_source.pcl_.size(); i++){
-    //     if(sub_cnt == 10){
-    //         aux_pcl.points.push_back(pcl_source.pcl_.at(i));
-    //         aux_cov_vec.push_back(pcl_source.pcl_covs_.at(i));
-    //         sub_cnt = 0;
-    //     }
-    //     ++sub_cnt;
-    // }
-    // pcl_source.pcl_.clear();
-    // pcl_source.pcl_ = aux_pcl;
-    // pcl_source.pcl_covs_.clear();
-    // pcl_source.pcl_covs_ = aux_cov_vec;
-    // aux_pcl.clear();
-    // aux_cov_vec.clear();
+    // Clear aux containers and repeat for src pcl
+    aux_pcl.clear();
+    aux_cov_vec.clear();
+    sub_cnt = 0;
+    for(unsigned int i=0; i<pcl_source.pcl_.size(); i++){
+        if(sub_cnt == 10){
+            aux_pcl.points.push_back(pcl_source.pcl_.at(i));
+            aux_cov_vec.push_back(pcl_source.pcl_covs_.at(i));
+            sub_cnt = 0;
+        }
+        ++sub_cnt;
+    }
+    pcl_source.pcl_.clear();
+    pcl_source.pcl_ = aux_pcl;
+    pcl_source.pcl_covs_.clear();
+    pcl_source.pcl_covs_ = aux_cov_vec;
+    aux_pcl.clear();
+    aux_cov_vec.clear();
 
     // Probabilistic ICP solver
     std::cout << "Creating PICP Solver" << std::endl;
@@ -218,10 +234,20 @@ int main (int argc, char* argv[]) {
     pclVisualizer(viewer, smtrg_pcl_ptr, smsrc_pcl_ptr, smsrc_pcl_ptr);
     pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_icp_color_h (smsrc_pcl_ptr, 180, 20, 20);
 
+    // ... read or fill in source and target
+    pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> est;
+    pcl::Correspondences all_correspondences;
+    est.setInputTarget(smtrg_pcl_ptr);   
+
     // Construct KdTree for target pcl
     icp_solver->constructKdTree(pcl_target);
     bool converged = false;
     while (!viewer.wasStopped()){
+        // Determine all correspondences and plot
+        all_correspondences.clear();
+        est.setInputSource(smsrc_pcl_ptr);
+        est.determineCorrespondences(all_correspondences, 20.0);
+        plotCorrespondences(viewer, all_correspondences, smsrc_pcl_ptr, smtrg_pcl_ptr);
         viewer.spinOnce ();
         // The user pressed "space" :
         if (next_iteration_icp){
@@ -248,15 +274,6 @@ int main (int argc, char* argv[]) {
         }
         next_iteration_icp = false;
     }
-
-    // ... read or fill in source and target
-    pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> est;
-    est.setInputSource(smsrc_pcl_ptr);
-    est.setInputTarget(smtrg_pcl_ptr);
-
-    pcl::Correspondences all_correspondences;
-    // Determine all reciprocal correspondences
-    est.determineReciprocalCorrespondences(all_correspondences);
 
     float mean_error = 0;
     for(auto correspondence_i: all_correspondences){
