@@ -38,6 +38,9 @@ using namespace std;
  * usually used for SIFT keypoint estimation.
  */
 
+int v1 (0);
+int v2 (1);
+
 namespace pcl
 {
     template <>
@@ -56,6 +59,36 @@ bool next_iteration_icp = false;
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing){
   if (event.getKeySym () == "space" && event.keyDown ())
     next_iteration_icp = true;
+}
+
+void plotCorrespondences(pcl::visualization::PCLVisualizer& viewer, 
+                         pcl::Correspondences& corrs, 
+                         PointCloudT::Ptr& src, 
+                         PointCloudT::Ptr& trg){
+
+    // Plot initial trajectory estimate
+    // viewer.removeAllCoordinateSystems(v1);
+    // viewer.addCoordinateSystem(5.0, "reference_frame", v1);
+    viewer.addCoordinateSystem(5.0, src->sensor_origin_(0), src->sensor_origin_(1), 
+                                src->sensor_origin_(2), "submap_1", v1);
+
+    viewer.addCoordinateSystem(5.0, trg->sensor_origin_(0), trg->sensor_origin_(1), 
+                            trg->sensor_origin_(2), "submap_2", v1);
+
+    int j = 0;
+    Eigen::Vector3i dr_color = Eigen::Vector3i(rand() % 256, rand() % 256, rand() % 256);
+    Eigen::Matrix4f tf = Eigen::Matrix4f::Identity();
+    tf (0, 3) = src->sensor_origin_(0);
+    tf (1, 3) = src->sensor_origin_(1);
+    tf (2, 3) = src->sensor_origin_(2);
+    for(auto corr_i: corrs){
+        Eigen::Vector4f p_src = tf * src->at(corr_i.index_query).getVector4fMap();
+        Eigen::Vector4f p_trg = tf * trg->at(corr_i.index_match).getVector4fMap();
+        viewer.addLine(PointT(p_src(0), p_src(1), p_src(2)), PointT(p_trg(0), p_trg(1), p_trg(2)),
+                dr_color[0], dr_color[1], dr_color[2], "corr_" + std::to_string(j), v1);
+        j++;
+    }
+    viewer.spinOnce();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -221,8 +254,6 @@ void pclVisualizer(pcl::visualization::PCLVisualizer& viewer,
                    const PointCloudT::Ptr cloud_icp){
 
     // Viewports
-    int v1 (0);
-    int v2 (1);
     viewer.createViewPort (0.0, 0.0, 0.5, 1.0, v1);
     viewer.createViewPort (0.5, 0.0, 1.0, 1.0, v2);
     float bckgr_gray_level = 0.0;  // Black
@@ -304,6 +335,7 @@ int main(int, char **argv)
     // Parse the command line arguments for .pcd files
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_src(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_trg(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_icp(new pcl::PointCloud<pcl::PointXYZ>);
 
     // Load the files
     if (pcl::io::loadPCDFile (argv[1], *cloud_src) < 0){
@@ -316,6 +348,19 @@ int main(int, char **argv)
         return (-1);
     }
 
+    // Initial misalignment between pointclouds
+    Eigen::Matrix4f transformation_matrix = Eigen::Matrix4f::Identity();
+    double theta = M_PI / 5;
+    transformation_matrix (0, 0) = cos (theta);
+    transformation_matrix (0, 1) = -sin (theta);
+    transformation_matrix (1, 0) = sin (theta);
+    transformation_matrix (1, 1) = cos (theta);
+//    transformation_matrix (0, 3) = -0.2;
+//    transformation_matrix (1, 3) = -0.4;
+//    transformation_matrix (2, 3) = -0.2;
+    pcl::transformPointCloud(*cloud_src, *cloud_icp, transformation_matrix);
+    // *cloud_trg = *cloud_trg;
+
     // Extract SIFT features of both submaps
     pcl::PointCloud<pcl::PointWithScale> result_src, result_trg;
     computeSiftFeatures(cloud_src, result_src);
@@ -323,23 +368,23 @@ int main(int, char **argv)
 
     // Initialize viewer object (use same while loop as in ICP PCL example?)
     pcl::visualization::PCLVisualizer viewer ("Probabilistic ICP demo");
-    pclVisualizer(viewer, cloud_src, cloud_trg, cloud_trg);
+    pclVisualizer(viewer, cloud_src, cloud_trg, cloud_icp);
     
     // Visualize SIFT point cloud
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_temp (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> keypoints1_color_handler (cloud_temp, 0, 255, 0);
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> keypoints2_color_handler (cloud_temp, 255, 0, 0);
-    int v2 (1);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_temp_src (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_temp_trg (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> keypoints1_color_handler (cloud_temp_src, 0, 255, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> keypoints2_color_handler (cloud_temp_trg, 255, 0, 0);
 
     // Copying the pointwithscale to pointxyz so as visualize the cloud
-    copyPointCloud(result_src, *cloud_temp);
-    std::cout << "SIFT points in the result are " << cloud_temp->size () << std::endl;
-    viewer.addPointCloud(cloud_temp, keypoints1_color_handler, "keypoints_src", v2);
+    copyPointCloud(result_src, *cloud_temp_src);
+    std::cout << "SIFT points in the result are " << cloud_temp_src->size () << std::endl;
+    viewer.addPointCloud(cloud_temp_src, keypoints1_color_handler, "keypoints_src", v1);
     viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "keypoints_src");
     
-    copyPointCloud(result_trg, *cloud_temp);
-    std::cout << "SIFT points in the result are " << cloud_temp->size () << std::endl;
-    viewer.addPointCloud(cloud_temp, keypoints2_color_handler, "keypoints_trg", v2);
+    copyPointCloud(result_trg, *cloud_temp_trg);
+    std::cout << "SIFT points in the result are " << cloud_temp_trg->size () << std::endl;
+    viewer.addPointCloud(cloud_temp_trg, keypoints2_color_handler, "keypoints_trg", v1);
     viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "keypoints_trg");
 
     // Update visualizer
@@ -349,18 +394,27 @@ int main(int, char **argv)
     pcl::visualization::PointCloudColorHandlerCustom<PointT> cloud_in_color_h (cloud_src, (int) 255 * txt_gray_lvl, (int) 255 * txt_gray_lvl,
                                                                                (int) 255 * txt_gray_lvl);
 
-    // Initial misalignment between pointclouds
-    Eigen::Matrix4f transformation_matrix = Eigen::Matrix4f::Identity();
-    double theta = M_PI / 5;
-    // transformation_matrix (0, 0) = cos (theta);
-    // transformation_matrix (0, 1) = -sin (theta);
-    // transformation_matrix (1, 0) = sin (theta);
-    // transformation_matrix (1, 1) = cos (theta);
-    transformation_matrix (0, 3) = -0.2;
-    transformation_matrix (1, 3) = -0.4;
-    transformation_matrix (2, 3) = 0.;
-    pcl::transformPointCloud(*cloud_src, *cloud_src, transformation_matrix);
-    viewer.updatePointCloud(cloud_src, cloud_in_color_h, "cloud_src_v2");
+    // // Initial misalignment between pointclouds
+    // Eigen::Matrix4f transformation_matrix = Eigen::Matrix4f::Identity();
+    // double theta = M_PI / 5;
+    // // transformation_matrix (0, 0) = cos (theta);
+    // // transformation_matrix (0, 1) = -sin (theta);
+    // // transformation_matrix (1, 0) = sin (theta);
+    // // transformation_matrix (1, 1) = cos (theta);
+    // transformation_matrix (0, 3) = -0.2;
+    // transformation_matrix (1, 3) = -0.4;
+    // transformation_matrix (2, 3) = 0.;
+    // pcl::transformPointCloud(*cloud_src, *cloud_src, transformation_matrix);
+    // viewer.updatePointCloud(cloud_src, cloud_in_color_h, "cloud_src_v2");
+
+    // Basic correspondence estimation between SIFT features
+    pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> est;
+    pcl::Correspondences all_correspondences;
+    all_correspondences.clear();
+    est.setInputSource(cloud_src);
+    est.setInputTarget(cloud_trg); 
+    est.determineReciprocalCorrespondences(all_correspondences, 20.0);
+    plotCorrespondences(viewer, all_correspondences, cloud_src, cloud_trg);
 
     while(!viewer.wasStopped ())
     {
@@ -372,7 +426,7 @@ int main(int, char **argv)
     // std::cout << "RUnning gicp" << std::endl;
     // runGicp(cloud_src, cloud_trg);
 
-    viewer.updatePointCloud(cloud_src, cloud_in_color_h, "cloud_src_v2");
+    // viewer.updatePointCloud(cloud_src, cloud_in_color_h, "cloud_src_v2");
    
 
     // // Compute the best transformtion
@@ -388,10 +442,10 @@ int main(int, char **argv)
 
     // viewer.updatePointCloud(output_ptr, cloud_icp_color_h, "cloud_icp_v2");
 
-    while(!viewer.wasStopped ())
-    {
-        viewer.spinOnce ();
-    }
+    // while(!viewer.wasStopped ())
+    // {
+    //     viewer.spinOnce ();
+    // }
 
     return 0;
 }
