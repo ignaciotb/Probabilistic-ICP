@@ -22,3 +22,8 @@ add_executable (test_sift_depth
 	src/test_sift_depth.cpp)
 target_link_libraries (test_sift_depth
 	${PCL_LIBRARIES})
+
+add_executable (test_full_corr
+	src/test_full_corr.cpp)
+target_link_libraries (test_full_corr
+	${PCL_LIBRARIES})
