@@ -5,6 +5,7 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/registration/gicp.h>
+#include <pcl/common/common.h>
 
 #include <pcl/registration/warp_point_rigid.h>
 #include <pcl/registration/warp_point_rigid_3d.h>
@@ -30,6 +31,7 @@ using namespace pcl::registration;
 PointCloud<PointXYZ>::Ptr src, tgt;
 
 typedef pcl::PointXYZ PointT;
+typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloudRGB;
 typedef pcl::PointCloud<PointT> PointCloudT;
 using namespace std;
 
@@ -54,6 +56,42 @@ namespace pcl
     };
 }
 
+using namespace Eigen;
+
+std::tuple<uint8_t, uint8_t, uint8_t> jet(double x)
+{
+    const double rone = 0.8;
+    const double gone = 1.0;
+    const double bone = 1.0;
+    double r, g, b;
+
+    x = (x < 0 ? 0 : (x > 1 ? 1 : x));
+
+    if (x < 1. / 8.) {
+        r = 0;
+        g = 0;
+        b = bone * (0.5 + (x) / (1. / 8.) * 0.5);
+    } else if (x < 3. / 8.) {
+        r = 0;
+        g = gone * (x - 1. / 8.) / (3. / 8. - 1. / 8.);
+        b = bone;
+    } else if (x < 5. / 8.) {
+        r = rone * (x - 3. / 8.) / (5. / 8. - 3. / 8.);
+        g = gone;
+        b = (bone - (x - 3. / 8.) / (5. / 8. - 3. / 8.));
+    } else if (x < 7. / 8.) {
+        r = rone;
+        g = (gone - (x - 5. / 8.) / (7. / 8. - 5. / 8.));
+        b = 0;
+    } else {
+        r = (rone - (x - 7. / 8.) / (1. - 7. / 8.) * 0.5);
+        g = 0;
+        b = 0;
+    }
+
+    return std::make_tuple(uint8_t(255.*r), uint8_t(255.*g), uint8_t(255.*b));
+}
+
 bool next_iteration_icp = false;
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing){
@@ -69,22 +107,24 @@ void plotCorrespondences(pcl::visualization::PCLVisualizer& viewer,
     // Plot initial trajectory estimate
     // viewer.removeAllCoordinateSystems(v1);
     // viewer.addCoordinateSystem(5.0, "reference_frame", v1);
-    viewer.addCoordinateSystem(5.0, src->sensor_origin_(0), src->sensor_origin_(1), 
-                                src->sensor_origin_(2), "submap_1");
+    // viewer.addCoordinateSystem(5.0, src->sensor_origin_(0), src->sensor_origin_(1), 
+    //                             src->sensor_origin_(2), "submap_0");
 
-    viewer.addCoordinateSystem(5.0, trg->sensor_origin_(0), trg->sensor_origin_(1), 
-                            trg->sensor_origin_(2), "submap_2");
+    // viewer.addCoordinateSystem(5.0, trg->sensor_origin_(0), trg->sensor_origin_(1), 
+    //                         trg->sensor_origin_(2), "submap_1");
 
     int j = 0;
     Eigen::Vector3i dr_color = Eigen::Vector3i(rand() % 256, rand() % 256, rand() % 256);
-    Eigen::Matrix4f tf = Eigen::Matrix4f::Identity();
-    tf (0, 3) = src->sensor_origin_(0);
-    tf (1, 3) = src->sensor_origin_(1);
-    tf (2, 3) = src->sensor_origin_(2);
+    // Eigen::Matrix4f tf = Eigen::Matrix4f::Identity();
+    // tf (0, 3) = src->sensor_origin_(0);
+    // tf (1, 3) = src->sensor_origin_(1);
+    // tf (2, 3) = src->sensor_origin_(2);
     for(auto corr_i: corrs){
-        Eigen::Vector4f p_src = tf * src->at(corr_i.index_query).getVector4fMap();
-        Eigen::Vector4f p_trg = tf * trg->at(corr_i.index_match).getVector4fMap();
-        viewer.addLine(PointT(p_src(0), p_src(1), p_src(2)), PointT(p_trg(0), p_trg(1), p_trg(2)),
+        // Eigen::Vector4f p_src = tf * src->at(corr_i.index_query).getVector4fMap();
+        // Eigen::Vector4f p_trg = tf * trg->at(corr_i.index_match).getVector4fMap();
+        // viewer.addLine(PointT(p_src(0), p_src(1), p_src(2)), PointT(p_trg(0), p_trg(1), p_trg(2)),
+        //         dr_color[0], dr_color[1], dr_color[2], "corr_" + std::to_string(j));
+        viewer.addLine(src->at(corr_i.index_query), trg->at(corr_i.index_match),
                 dr_color[0], dr_color[1], dr_color[2], "corr_" + std::to_string(j));
         j++;
     }
@@ -123,7 +163,7 @@ estimateNormals (const PointCloud<PointXYZ>::Ptr &src,
 {
   NormalEstimation<PointXYZ, Normal> normal_est;
   normal_est.setInputCloud (src);
-  normal_est.setRadiusSearch (0.5);  // 50cm
+  normal_est.setRadiusSearch (5);  // 50cm
   normal_est.compute (normals_src);
 
   normal_est.setInputCloud (tgt);
@@ -247,8 +287,8 @@ computeTransformation (const PointCloud<PointXYZ>::Ptr &src,
 
   std::cout << "Number of correspondances " << all_correspondences->size() << std::endl;
   std::cout << "Number of good correspondances " << good_correspondences->size() << std::endl;
-  for (const auto& corr : (*good_correspondences))
-    std::cerr << corr << std::endl;
+  // for (const auto& corr : (*good_correspondences))
+  //   std::cerr << corr << std::endl;
   // Obtain the best transformation between the two sets of keypoints given the remaining correspondences
   TransformationEstimationSVD<PointXYZ, PointXYZ> trans_est;
   trans_est.estimateRigidTransformation (*keypoints_src, *keypoints_tgt, *all_correspondences, transform);
@@ -336,6 +376,48 @@ void computeSiftFeatures(const PointCloudT::Ptr cloud_in, pcl::PointCloud<pcl::P
     std::cout << "No of SIFT points in the result are " << result.size() << std::endl;
 }
 
+void rgbVis (pcl::visualization::PCLVisualizer::Ptr& viewer, 
+             pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in, 
+             int i){
+    int vp1_;
+
+    // pcl::visualization::PCLVisualizer::Ptr viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+
+    float black = 0.0;  // Black
+    float white = 1.0 - black;
+    // viewer->createViewPort (0.0, 0.0, 1.0, 1.0, vp1_);
+
+    // unsigned int i = 0;
+    PointCloudRGB::Ptr cloud_clr (new PointCloudRGB);
+    // Find max and min depth in map
+    PointT min, max;
+    pcl::getMinMax3D(*cloud_in, min, max);
+    std::cout << "Max " << max.getArray3fMap().transpose() << std::endl;
+    std::cout << "Min " << min.getArray3fMap().transpose() << std::endl;
+    // Normalize and give colors based on z
+    for(PointT& pointt: cloud_in->points){
+        pcl::PointXYZRGB pointrgb;
+        pointrgb.x = pointt.x;
+        pointrgb.y = pointt.y;
+        pointrgb.z = pointt.z;
+        std::tuple<uint8_t, uint8_t, uint8_t> colors_rgb;
+        colors_rgb = jet((pointt.z - min.z)/(max.z - min.z));
+        std::uint32_t rgb = (static_cast<std::uint32_t>(std::get<0>(colors_rgb)) << 16 |
+                              static_cast<std::uint32_t>(std::get<1>(colors_rgb)) << 8 |
+                              static_cast<std::uint32_t>(std::get<2>(colors_rgb)));
+        pointrgb.rgb = *reinterpret_cast<float*>(&rgb);
+        cloud_clr->points.push_back(pointrgb);
+    }
+    std::cout << cloud_clr->points.size() << std::endl;
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb_h(cloud_clr);
+    viewer->addPointCloud(cloud_clr, rgb_h, "submap_" + std::to_string(i));
+    // viewer->addCoordinateSystem(3.0, submap.submap_tf_, "gt_cloud_" + std::to_string(i), vp1_);
+    // viewer->addCoordinateSystem(5.0, cloud_in->sensor_origin_(0), cloud_in->sensor_origin_(1), 
+    //                             cloud_in->sensor_origin_(2), "submap_" + std::to_string(i));
+
+    // return (viewer);
+}
+
 int main(int, char **argv)
 {
     // Parse the command line arguments for .pcd files
@@ -372,22 +454,16 @@ int main(int, char **argv)
     // computeSiftFeatures(cloud_src, result_src);
     // computeSiftFeatures(cloud_trg, result_trg);
 
-    // // Initialize viewer object (use same while loop as in ICP PCL example?)
+    // // Initialize viewer object
     // pcl::visualization::PCLVisualizer viewer ("Probabilistic ICP demo");
     // pclVisualizer(viewer, cloud_src, cloud_trg, cloud_icp);
 
     // Visualization of keypoints along with the original cloud
-    pcl::visualization::PCLVisualizer viewer("PCL Viewer");
-    // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> keypoints_color_handler (cloud_temp, 0, 255, 0);
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_color_handler_1 (cloud_1, 255, 0, 0);
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_color_handler_2 (cloud_1_noisy, 0, 255, 0);
-    viewer.setBackgroundColor( 0.0, 0.0, 0.0 );
-    viewer.addPointCloud(cloud_1, cloud_color_handler_1, "cloud_1");
-    viewer.addPointCloud(cloud_1_noisy, cloud_color_handler_2, "cloud_noisy");
-    // viewer.addPointCloud(cloud_temp, keypoints_color_handler, "keypoints");
-    // viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "keypoints");
+    pcl::visualization::PCLVisualizer::Ptr viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+    rgbVis(viewer, cloud_1, 0);
+    rgbVis(viewer, cloud_1_noisy, 1);
+    viewer->setBackgroundColor( 0.0, 0.0, 0.0 );
 
-    
     // // Visualize SIFT point cloud
     // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_temp_src (new pcl::PointCloud<pcl::PointXYZ>);
     // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_temp_trg (new pcl::PointCloud<pcl::PointXYZ>);
@@ -405,7 +481,6 @@ int main(int, char **argv)
     // viewer.addPointCloud(cloud_temp_trg, keypoints2_color_handler, "keypoints_trg", v1);
     // viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "keypoints_trg");
 
-
     // Basic correspondence estimation between SIFT features
     // pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> est;
     // pcl::Correspondences all_correspondences;
@@ -419,13 +494,13 @@ int main(int, char **argv)
     Eigen::Matrix4f transform;
     CorrespondencesPtr result_correspondences;
     computeTransformation (cloud_1, cloud_1_noisy, transform, result_correspondences);
-    plotCorrespondences(viewer, *result_correspondences, cloud_1, cloud_1_noisy);
+    plotCorrespondences(*viewer, *result_correspondences, cloud_1, cloud_1_noisy);
 
-    while(!viewer.wasStopped ())
+    while(!viewer->wasStopped ())
     {
-        viewer.spinOnce ();
+        viewer->spinOnce ();
     }
-    viewer.resetStoppedFlag();
+    viewer->resetStoppedFlag();
 
     // std::cerr << transform << std::endl;
     // // Transform the data and write it to disk
