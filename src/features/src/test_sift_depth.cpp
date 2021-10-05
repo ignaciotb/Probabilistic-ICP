@@ -221,7 +221,8 @@ findCorrespondences (const PointCloud<FPFHSignature33>::Ptr &fpfhs_src,
   CorrespondenceEstimation<FPFHSignature33, FPFHSignature33> est;
   est.setInputCloud (fpfhs_src);
   est.setInputTarget (fpfhs_tgt);
-  est.determineReciprocalCorrespondences (all_correspondences);
+  // est.determineReciprocalCorrespondences(all_correspondences);
+  est.determineCorrespondences(all_correspondences, 100);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -234,7 +235,7 @@ rejectBadCorrespondences (const CorrespondencesPtr &all_correspondences,
   CorrespondenceRejectorDistance rej;
   rej.setInputSource<PointXYZ> (keypoints_src);
   rej.setInputTarget<PointXYZ> (keypoints_tgt);
-  rej.setMaximumDistance (30);    // 1m
+  rej.setMaximumDistance (40);    // 1m
   rej.setInputCorrespondences (all_correspondences);
   rej.getCorrespondences (remaining_correspondences);
 }
@@ -319,8 +320,8 @@ void pclVisualizer(pcl::visualization::PCLVisualizer& viewer,
     // Text descriptions and background
     viewer.addText ("White: Original point cloud\nGreen: Matrix transformed point cloud", 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "icp_info_1", v1);
     viewer.addText ("White: Original point cloud\nRed: PICP aligned point cloud", 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "icp_info_2", v2);
-    viewer.setBackgroundColor (bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v1);
-    viewer.setBackgroundColor (bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v2);
+    viewer.setBackgroundColor(txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, v1);
+    viewer.setBackgroundColor(txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, v2);
 
     // Set camera position and orientation
     viewer.setCameraPosition (-3.68332, 2.94092, 5.71266, 0.289847, 0.921947, -0.256907, 0);
@@ -443,8 +444,8 @@ int main(int, char **argv)
     // transformation_matrix (0, 1) = -sin (theta);
     // transformation_matrix (1, 0) = sin (theta);
     // transformation_matrix (1, 1) = cos (theta);
-    transformation_matrix (0, 3) = -20.2;
-    transformation_matrix (1, 3) = -30.4;
+    transformation_matrix (0, 3) = -10.2;
+    transformation_matrix (1, 3) = -20.4;
 //    transformation_matrix (2, 3) = -0.2;
     pcl::transformPointCloud(*cloud_1, *cloud_1_noisy, transformation_matrix);
     // *cloud_trg = *cloud_trg;
@@ -491,10 +492,23 @@ int main(int, char **argv)
     // plotCorrespondences(viewer, all_correspondences, cloud_1, cloud_1_noisy);
 
     // // Compute the best transformtion
-    Eigen::Matrix4f transform;
-    CorrespondencesPtr result_correspondences;
-    computeTransformation (cloud_1, cloud_1_noisy, transform, result_correspondences);
-    plotCorrespondences(*viewer, *result_correspondences, cloud_1, cloud_1_noisy);
+    // Eigen::Matrix4f transform;
+    // CorrespondencesPtr result_correspondences;
+    // computeTransformation (cloud_1, cloud_1_noisy, transform, result_correspondences);
+
+    pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> est;
+    // CorrespondencesPtr all_correspondences, good_correspondences;
+    CorrespondencesPtr all_correspondences(new Correspondences),
+                       good_correspondences(new Correspondences);
+    est.setInputTarget(cloud_1);
+    est.setInputSource(cloud_1_noisy);
+    est.determineReciprocalCorrespondences(*all_correspondences, 30.0);
+    rejectBadCorrespondences(all_correspondences, cloud_1, cloud_1_noisy, *good_correspondences);
+
+    std::cout << "Number of correspondances " << all_correspondences->size() << std::endl;
+    std::cout << "Number of good correspondances " << good_correspondences->size() << std::endl;
+
+    plotCorrespondences(*viewer, *good_correspondences, cloud_1, cloud_1_noisy);
 
     while(!viewer->wasStopped ())
     {
